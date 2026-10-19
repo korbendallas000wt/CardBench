@@ -5,6 +5,7 @@ import CardEditor from './components/CardEditor';
 import CardGallery from './components/CardGallery';
 import PrintView from './components/PrintView';
 import ImportExport from './components/ImportExport';
+import VersionInfo from './components/VersionInfo';
 
 type View = 'gallery' | 'editor' | 'print';
 
@@ -15,12 +16,10 @@ function App() {
   const [printCards, setPrintCards] = useState<CardData[]>([]);
   const [showImportExport, setShowImportExport] = useState(false);
 
-  // Load cards from localStorage on mount
   useEffect(() => {
     setCards(loadCards());
   }, []);
 
-  // Save cards to localStorage whenever they change
   useEffect(() => {
     if (cards.length > 0 || localStorage.getItem('card-game-cards')) {
       saveCards(cards);
@@ -83,8 +82,7 @@ function App() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 text-white">
-      {/* Header */}
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-gray-900 text-white relative">
       {view !== 'print' && (
         <header className="border-b border-white/5 bg-black/20 backdrop-blur-sm sticky top-0 z-40">
           <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
@@ -117,7 +115,6 @@ function App() {
         </header>
       )}
 
-      {/* Main Content */}
       <main>
         {view === 'gallery' && (
           <CardGallery
@@ -146,7 +143,6 @@ function App() {
         )}
       </main>
 
-      {/* Import/Export Modal */}
       {showImportExport && (
         <ImportExport
           cards={cards}
@@ -154,6 +150,8 @@ function App() {
           onClose={() => setShowImportExport(false)}
         />
       )}
+
+      <VersionInfo />
     </div>
   );
 }
