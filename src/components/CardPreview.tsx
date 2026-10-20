@@ -1,4 +1,4 @@
-import { CardData } from '../types';
+import { CardData, Attribute } from '../types';
 import { mmToPx } from '../utils';
 
 interface Props {
@@ -27,7 +27,7 @@ export default function CardPreview({ card, scale = 1, forPrint = false }: Props
         boxSizing: 'border-box',
       }}
     >
-      {/* Image Section */}
+      {/* Основное изображение */}
       <div
         className="relative overflow-hidden flex-shrink-0"
         style={{
@@ -54,14 +54,13 @@ export default function CardPreview({ card, scale = 1, forPrint = false }: Props
         )}
       </div>
 
-      {/* Text Section */}
+      {/* Текстовая секция (заголовок, описание, правила) */}
       <div
         className="flex-1 flex flex-col overflow-hidden"
         style={{
           padding: `${scaled(settings.padding)}px`,
         }}
       >
-        {/* Title */}
         {card.title && (
           <h3
             className="font-bold leading-tight mb-1 truncate"
@@ -74,29 +73,6 @@ export default function CardPreview({ card, scale = 1, forPrint = false }: Props
           </h3>
         )}
 
-        {/* Attributes */}
-        {card.attributes.length > 0 && card.attributes.some(a => a.label || a.value) && (
-          <div className="mb-1 flex flex-wrap gap-x-2 gap-y-0.5">
-            {card.attributes.filter((a: { label: string; value: string }) => a.label || a.value).map((attr: { label: string; value: string }, i: number) => (
-              <span
-                key={i}
-                className="inline-flex items-center gap-0.5"
-                style={{ fontSize: `${scaled(settings.attrSize)}px` }}
-              >
-                {attr.label && (
-                  <span className="font-semibold" style={{ color: settings.titleColor }}>
-                    {attr.label}:
-                  </span>
-                )}
-                {attr.value && (
-                  <span style={{ color: settings.textColor }}>{attr.value}</span>
-                )}
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Description */}
         {card.description && (
           <p
             className="leading-snug overflow-hidden flex-1"
@@ -112,7 +88,6 @@ export default function CardPreview({ card, scale = 1, forPrint = false }: Props
           </p>
         )}
 
-        {/* Rules */}
         {card.rules && (
           <div
             className="mt-auto border-t pt-1"
@@ -127,6 +102,57 @@ export default function CardPreview({ card, scale = 1, forPrint = false }: Props
           </div>
         )}
       </div>
+
+      {/* СЛОИ: Элементы-атрибуты поверх карточки */}
+      {card.attributes.map((attr: Attribute) => {
+        if (attr.type === 'text') {
+          return (
+            <div
+              key={attr.id}
+              className="absolute pointer-events-none"
+              style={{
+                left: `${attr.x}%`,
+                top: `${attr.y}%`,
+                fontSize: `${scaled(attr.fontSize)}px`,
+                color: attr.color,
+                fontFamily: attr.fontFamily,
+                transform: `rotate(${attr.rotation}deg)`,
+                transformOrigin: 'center center',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {attr.content}
+            </div>
+          );
+        } else if (attr.type === 'image' && attr.imageUrl) {
+          return (
+            <div
+              key={attr.id}
+              className="absolute pointer-events-none"
+              style={{
+                left: `${attr.x}%`,
+                top: `${attr.y}%`,
+                width: `${attr.width}%`,
+                height: `${attr.height}%`,
+                transform: `rotate(${attr.rotation}deg)`,
+                transformOrigin: 'center center',
+              }}
+            >
+              <img
+                src={attr.imageUrl}
+                alt=""
+                className="w-full h-full"
+                style={{
+                  borderRadius: `${scaled(attr.borderRadius)}px`,
+                  objectFit: 'cover',
+                }}
+                draggable={false}
+              />
+            </div>
+          );
+        }
+        return null;
+      })}
     </div>
   );
 }

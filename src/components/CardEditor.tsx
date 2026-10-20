@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-import { CardData, CardSettings, Attribute, DEFAULT_SETTINGS, FONT_OPTIONS, STANDARD_SIZES } from '../types';
+import { CardData, CardSettings, Attribute, TextAttribute, ImageAttribute, DEFAULT_SETTINGS, FONT_OPTIONS, STANDARD_SIZES } from '../types';
 import { generateId, fileToBase64 } from '../utils';
 import CardPreview from './CardPreview';
 
@@ -13,9 +13,13 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
   const [title, setTitle] = useState(editCard?.title ?? '');
   const [description, setDescription] = useState(editCard?.description ?? '');
   const [rules, setRules] = useState(editCard?.rules ?? '');
-  const [attributes, setAttributes] = useState<Attribute[]>(
-    editCard?.attributes ?? [{ label: '', value: '' }, { label: '', value: '' }]
-  );
+  
+  // Инициализация атрибутов: если их нет, создаём один текстовый по умолчанию
+  const defaultAttrs: Attribute[] = editCard?.attributes && editCard.attributes.length > 0 
+    ? editCard.attributes 
+    : [{ type: 'text', id: generateId(), content: 'Текст атрибута', x: 10, y: 80, fontSize: 12, color: '#ffffff', fontFamily: 'Arial, sans-serif', rotation: 0 }];
+    
+  const [attributes, setAttributes] = useState<Attribute[]>(defaultAttrs);
   const [image, setImage] = useState<string | null>(editCard?.image ?? null);
   const [settings, setSettings] = useState<CardSettings>(editCard?.settings ?? { ...DEFAULT_SETTINGS });
   const [activeTab, setActiveTab] = useState<'content' | 'style'>('content');
@@ -55,41 +59,26 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     const seed = Math.floor(Math.random() * 100000);
     const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true&seed=${seed}`;
     
-    console.log("🔄 Запрос к ИИ:", url);
-
     try {
       const response = await fetch(url);
-      console.log("📡 Статус ответа:", response.status, response.statusText);
-
       if (!response.ok) {
-        if (response.status === 403) {
-          throw new Error("Доступ запрещён (403). Защита сервиса может блокировать локальную разработку (localhost). Проверьте работу на опубликованном сайте.");
-        }
+        if (response.status === 403) throw new Error("Доступ запрещён (403). Проверьте работу на опубликованном сайте.");
         throw new Error(`HTTP ошибка! Статус: ${response.status}`);
       }
-
       const blob = await response.blob();
-      console.log("📦 Тип полученных данных (blob.type):", blob.type);
-
-      if (!blob.type.startsWith('image/')) {
-        throw new Error(`Получен не файл изображения, а: ${blob.type}.`);
-      }
+      if (!blob.type.startsWith('image/')) throw new Error(`Получен не файл изображения, а: ${blob.type}.`);
 
       const reader = new FileReader();
       reader.onloadend = () => {
-        console.log("✅ Изображение успешно конвертировано в base64");
         setGeneratedImage(reader.result as string);
         setIsGenerating(false);
       };
       reader.onerror = () => {
-        console.error("❌ Ошибка FileReader");
         setIsGenerating(false);
         setGenerateError("Ошибка при обработке данных изображения.");
       };
       reader.readAsDataURL(blob);
-      
     } catch (error: any) {
-      console.error("❌ Ошибка генерации:", error);
       setIsGenerating(false);
       setGenerateError(error.message || "Неизвестная ошибка сети");
     }
@@ -109,21 +98,43 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  const updateAttribute = (index: number, field: 'label' | 'value', val: string) => {
-    setAttributes(prev => {
-      const next = [...prev];
-      next[index] = { ...next[index], [field]: val };
-      return next;
-    });
+  // --- НОВАЯ ЛОГИКА АТРИБУТОВ ---
+  const addTextAttribute = () => {
+    setAttributes(prev => [...prev, {
+      type: 'text',
+      id: generateId(),
+      content: 'Новый текст',
+      x: 10, y: 10, fontSize: 14, color: '#ffffff', fontFamily: 'Arial, sans-serif', rotation: 0
+    }]);
   };
 
-  const addAttribute = () => {
-    setAttributes(prev => [...prev, { label: '', value: '' }]);
+  const addImageAttribute = () => {
+    setAttributes(prev => [...prev, {
+      type: 'image',
+      id: generateId(),
+      imageUrl: '',
+      x: 10, y: 10, width: 30, height: 30, borderRadius: 0, rotation: 0
+    }]);
   };
 
-  const removeAttribute = (index: number) => {
-    setAttributes(prev => prev.filter((_, i) => i !== index));
+  const updateAttribute = (id: string, field: string, value: any) => {
+    setAttributes(prev => prev.map(attr =>
+      attr.id === id ? { ...attr, [field]: value } : attr
+    ));
   };
+
+  const removeAttribute = (id: string) => {
+    setAttributes(prev => prev.filter(attr => attr.id !== id));
+  };
+
+  const handleAttrImageUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const base64 = await fileToBase64(file);
+      updateAttribute(id, 'imageUrl', base64);
+    }
+  };
+  // ------------------------------
 
   const handleSave = () => {
     const now = Date.now();
@@ -131,7 +142,7 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
       id: editCard?.id ?? generateId(),
       title,
       description,
-      attributes: attributes.filter(a => a.label || a.value),
+      attributes, // Теперь это массив TextAttribute | ImageAttribute
       rules,
       image,
       settings,
@@ -145,7 +156,7 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     id: 'preview',
     title,
     description,
-    attributes: attributes.filter(a => a.label || a.value),
+    attributes,
     rules,
     image,
     settings,
@@ -169,8 +180,9 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {activeTab === 'content' ? (
             <>
+              {/* Основное изображение карточки */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Изображение</label>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Фон / Основное изображение</label>
                 <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center cursor-pointer hover:border-purple-500/50 transition-colors" onClick={() => fileInputRef.current?.click()} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
                   {image ? (
                     <div className="relative">
@@ -181,7 +193,6 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
                     <div className="text-gray-500">
                       <p className="text-2xl mb-2">🖼</p>
                       <p className="text-sm">Нажмите или перетащите изображение</p>
-                      <p className="text-xs mt-1">PNG, JPG, WebP</p>
                     </div>
                   )}
                 </div>
@@ -193,39 +204,22 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
 
                 {showAiGen && (
                   <div className="mt-3 p-4 bg-black/20 border border-purple-500/20 rounded-lg space-y-3">
-                    <div>
-                      <label className="block text-xs text-gray-400 mb-1">Описание (промпт, лучше на английском)</label>
-                      <textarea 
-                        value={aiPrompt} 
-                        onChange={(e) => setAiPrompt(e.target.value)} 
-                        placeholder="e.g., dark fantasy forest, glowing mushrooms, magical, detailed" 
-                        rows={2} 
-                        className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none resize-none" 
-                      />
-                    </div>
-                    
+                    <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="e.g., dark fantasy forest, glowing mushrooms" rows={2} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none resize-none" />
                     <div className="flex flex-wrap gap-2">
                       {['fantasy forest', 'magic crystal', 'medieval sword', 'spaceship', 'ancient scroll'].map(tag => (
                         <button key={tag} onClick={() => setAiPrompt(tag)} className="text-xs px-2 py-1 bg-white/5 hover:bg-purple-600/30 border border-white/10 rounded transition-colors">{tag}</button>
                       ))}
                     </div>
-
-                    <button onClick={handleAiGenerate} disabled={isGenerating || !aiPrompt.trim()} className="w-full py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg text-sm font-medium transition-all flex items-center justify-center gap-2">
-                      {isGenerating ? (<><span className="animate-spin">⏳</span> Генерация... (10-20 сек)</>) : ('✨ Сгенерировать')}
+                    <button onClick={handleAiGenerate} disabled={isGenerating || !aiPrompt.trim()} className="w-full py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
+                      {isGenerating ? '⏳ Генерация...' : '✨ Сгенерировать'}
                     </button>
-                    
-                    {generateError && (
-                      <div className="p-3 bg-red-500/20 border border-red-500/50 rounded text-sm text-red-200">
-                        ⚠️ {generateError}
-                      </div>
-                    )}
-
+                    {generateError && <div className="p-3 bg-red-500/20 border border-red-500/50 rounded text-sm text-red-200">⚠️ {generateError}</div>}
                     {generatedImage && (
                       <div className="space-y-3 pt-2 border-t border-white/10">
                         <img src={generatedImage} alt="Generated" className="w-full max-h-48 object-contain rounded-lg border border-white/10 bg-black/40" />
                         <div className="flex gap-2">
-                          <button onClick={handleUseGeneratedImage} className="flex-1 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium transition-colors">✅ Использовать это изображение</button>
-                          <button onClick={() => { setGeneratedImage(null); setAiPrompt(''); setGenerateError(null); }} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm transition-colors">Отмена</button>
+                          <button onClick={handleUseGeneratedImage} className="flex-1 py-2 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium">✅ Использовать</button>
+                          <button onClick={() => { setGeneratedImage(null); setAiPrompt(''); setGenerateError(null); }} className="px-4 py-2 bg-white/5 hover:bg-white/10 rounded-lg text-sm">Отмена</button>
                         </div>
                       </div>
                     )}
@@ -238,18 +232,116 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
                 <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название карточки..." className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none" />
               </div>
 
+              {/* НОВАЯ СЕКЦИЯ АТРИБУТОВ-СЛОЁВ */}
               <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Атрибуты</label>
-                <div className="space-y-2">
-                  {attributes.map((attr, i) => (
-                    <div key={i} className="flex gap-2 items-center">
-                      <input type="text" value={attr.label} onChange={(e) => updateAttribute(i, 'label', e.target.value)} placeholder="Название" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none" />
-                      <input type="text" value={attr.value} onChange={(e) => updateAttribute(i, 'value', e.target.value)} placeholder="Значение" className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none" />
-                      <button onClick={() => removeAttribute(i)} className="text-red-400 hover:text-red-300 text-lg px-1">✕</button>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-300">Элементы на карточке (Слои)</label>
+                  <div className="flex gap-2">
+                    <button onClick={addTextAttribute} className="text-xs px-2 py-1 bg-blue-600/30 hover:bg-blue-600/50 border border-blue-500/30 rounded text-blue-300 transition-colors">+ Текст</button>
+                    <button onClick={addImageAttribute} className="text-xs px-2 py-1 bg-green-600/30 hover:bg-green-600/50 border border-green-500/30 rounded text-green-300 transition-colors">+ Картинка</button>
+                  </div>
+                </div>
+                
+                <div className="space-y-4">
+                  {attributes.map((attr, index) => (
+                    <div key={attr.id} className="p-3 bg-black/20 border border-white/10 rounded-lg space-y-3 relative group">
+                      <button onClick={() => removeAttribute(attr.id)} className="absolute top-2 right-2 text-red-400 hover:text-red-300 text-lg opacity-50 group-hover:opacity-100 transition-opacity">✕</button>
+                      
+                      {attr.type === 'text' ? (
+                        <>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Текстовый слой #{index + 1}</span>
+                          </div>
+                          <textarea value={attr.content} onChange={(e) => updateAttribute(attr.id, 'content', e.target.value)} placeholder="Текст..." rows={2} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none resize-none" />
+                          
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Позиция X (%): {attr.x}</label>
+                              <input type="range" min={0} max={100} value={attr.x} onChange={(e) => updateAttribute(attr.id, 'x', Number(e.target.value))} className="w-full accent-blue-500" />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Позиция Y (%): {attr.y}</label>
+                              <input type="range" min={0} max={100} value={attr.y} onChange={(e) => updateAttribute(attr.id, 'y', Number(e.target.value))} className="w-full accent-blue-500" />
+                            </div>
+                          </div>
+                          
+                          <div className="grid grid-cols-3 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Размер (px)</label>
+                              <input type="number" value={attr.fontSize} onChange={(e) => updateAttribute(attr.id, 'fontSize', Number(e.target.value))} min={6} max={48} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Поворот (°)</label>
+                              <input type="number" value={attr.rotation} onChange={(e) => updateAttribute(attr.id, 'rotation', Number(e.target.value))} min={-180} max={180} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Цвет</label>
+                              <input type="color" value={attr.color} onChange={(e) => updateAttribute(attr.id, 'color', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" />
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-xs text-gray-400 mb-1">Шрифт</label>
+                            <select value={attr.fontFamily} onChange={(e) => updateAttribute(attr.id, 'fontFamily', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none">
+                              {FONT_OPTIONS.map((f) => (<option key={f.value} value={f.value} style={{ fontFamily: f.value }}>{f.label}</option>))}
+                            </select>
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-bold text-green-400 uppercase tracking-wider">Графический слой #{index + 1}</span>
+                          </div>
+                          
+                          <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center cursor-pointer hover:border-green-500/50 transition-colors relative">
+                            {attr.imageUrl ? (
+                              <div className="relative">
+                                <img src={attr.imageUrl} alt="" className="max-h-24 mx-auto rounded" />
+                                <button onClick={(e) => { e.stopPropagation(); updateAttribute(attr.id, 'imageUrl', ''); }} className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center hover:bg-red-600">✕</button>
+                              </div>
+                            ) : (
+                              <p className="text-xs text-gray-500">Нажмите для загрузки изображения</p>
+                            )}
+                            <input type="file" accept="image/*" onChange={(e) => handleAttrImageUpload(attr.id, e)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Позиция X (%): {attr.x}</label>
+                              <input type="range" min={0} max={100} value={attr.x} onChange={(e) => updateAttribute(attr.id, 'x', Number(e.target.value))} className="w-full accent-green-500" />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Позиция Y (%): {attr.y}</label>
+                              <input type="range" min={0} max={100} value={attr.y} onChange={(e) => updateAttribute(attr.id, 'y', Number(e.target.value))} className="w-full accent-green-500" />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Ширина (%): {attr.width}</label>
+                              <input type="range" min={5} max={100} value={attr.width} onChange={(e) => updateAttribute(attr.id, 'width', Number(e.target.value))} className="w-full accent-green-500" />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Высота (%): {attr.height}</label>
+                              <input type="range" min={5} max={100} value={attr.height} onChange={(e) => updateAttribute(attr.id, 'height', Number(e.target.value))} className="w-full accent-green-500" />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Поворот (°)</label>
+                              <input type="number" value={attr.rotation} onChange={(e) => updateAttribute(attr.id, 'rotation', Number(e.target.value))} min={-180} max={180} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" />
+                            </div>
+                            <div>
+                              <label className="block text-xs text-gray-400 mb-1">Скругление (px)</label>
+                              <input type="number" value={attr.borderRadius} onChange={(e) => updateAttribute(attr.id, 'borderRadius', Number(e.target.value))} min={0} max={50} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" />
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
-                <button onClick={addAttribute} className="mt-2 text-sm text-purple-400 hover:text-purple-300">+ Добавить атрибут</button>
               </div>
 
               <div>
@@ -263,6 +355,7 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
               </div>
             </>
           ) : (
+            // Вкладка "Стиль" остаётся без изменений (управляет глобальными настройками карточки)
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Стандартные размеры</label>
@@ -272,91 +365,49 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
                   ))}
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Ширина (мм)</label>
-                  <input type="number" value={settings.width} onChange={(e) => updateSetting('width', Number(e.target.value))} min={20} max={200} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Высота (мм)</label>
-                  <input type="number" value={settings.height} onChange={(e) => updateSetting('height', Number(e.target.value))} min={20} max={200} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                </div>
+                <div><label className="block text-xs text-gray-400 mb-1">Ширина (мм)</label><input type="number" value={settings.width} onChange={(e) => updateSetting('width', Number(e.target.value))} min={20} max={200} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
+                <div><label className="block text-xs text-gray-400 mb-1">Высота (мм)</label><input type="number" value={settings.height} onChange={(e) => updateSetting('height', Number(e.target.value))} min={20} max={200} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
               </div>
-
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Высота изображения: {settings.imageHeight}%</label>
+                <label className="block text-xs text-gray-400 mb-1">Высота основного изображения: {settings.imageHeight}%</label>
                 <input type="range" min={10} max={80} value={settings.imageHeight} onChange={(e) => updateSetting('imageHeight', Number(e.target.value))} className="w-full accent-purple-500" />
               </div>
-
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Масштабирование изображения</label>
+                <label className="block text-xs text-gray-400 mb-1">Масштабирование основного изображения</label>
                 <select value={settings.imageFit} onChange={(e) => updateSetting('imageFit', e.target.value as 'cover' | 'contain')} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none">
                   <option value="cover">Заполнение (cover)</option>
                   <option value="contain">Вместить (contain)</option>
                 </select>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Толщина рамки (px)</label>
-                  <input type="number" value={settings.borderWidth} onChange={(e) => updateSetting('borderWidth', Number(e.target.value))} min={0} max={10} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Скругление (px)</label>
-                  <input type="number" value={settings.borderRadius} onChange={(e) => updateSetting('borderRadius', Number(e.target.value))} min={0} max={30} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                </div>
+                <div><label className="block text-xs text-gray-400 mb-1">Толщина рамки (px)</label><input type="number" value={settings.borderWidth} onChange={(e) => updateSetting('borderWidth', Number(e.target.value))} min={0} max={10} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
+                <div><label className="block text-xs text-gray-400 mb-1">Скругление карточки (px)</label><input type="number" value={settings.borderRadius} onChange={(e) => updateSetting('borderRadius', Number(e.target.value))} min={0} max={30} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
               </div>
-
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Скругление изображения (px)</label>
+                <label className="block text-xs text-gray-400 mb-1">Скругление основного изображения (px)</label>
                 <input type="range" min={0} max={20} value={settings.imageRadius} onChange={(e) => updateSetting('imageRadius', Number(e.target.value))} className="w-full accent-purple-500" />
               </div>
-
               <div>
                 <label className="block text-xs text-gray-400 mb-1">Отступы (px): {settings.padding}</label>
                 <input type="range" min={2} max={24} value={settings.padding} onChange={(e) => updateSetting('padding', Number(e.target.value))} className="w-full accent-purple-500" />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Фон карточки</label>
-                  <input type="color" value={settings.backgroundColor} onChange={(e) => updateSetting('backgroundColor', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Цвет рамки</label>
-                  <input type="color" value={settings.borderColor} onChange={(e) => updateSetting('borderColor', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Цвет заголовка</label>
-                  <input type="color" value={settings.titleColor} onChange={(e) => updateSetting('titleColor', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Цвет текста</label>
-                  <input type="color" value={settings.textColor} onChange={(e) => updateSetting('textColor', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" />
-                </div>
+                <div><label className="block text-xs text-gray-400 mb-1">Фон карточки</label><input type="color" value={settings.backgroundColor} onChange={(e) => updateSetting('backgroundColor', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" /></div>
+                <div><label className="block text-xs text-gray-400 mb-1">Цвет рамки</label><input type="color" value={settings.borderColor} onChange={(e) => updateSetting('borderColor', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" /></div>
+                <div><label className="block text-xs text-gray-400 mb-1">Цвет заголовка</label><input type="color" value={settings.titleColor} onChange={(e) => updateSetting('titleColor', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" /></div>
+                <div><label className="block text-xs text-gray-400 mb-1">Цвет текста по умолчанию</label><input type="color" value={settings.textColor} onChange={(e) => updateSetting('textColor', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" /></div>
               </div>
-
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Шрифт</label>
+                <label className="block text-xs text-gray-400 mb-1">Шрифт по умолчанию</label>
                 <select value={settings.fontFamily} onChange={(e) => updateSetting('fontFamily', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none">
                   {FONT_OPTIONS.map((f) => (<option key={f.value} value={f.value} style={{ fontFamily: f.value }}>{f.label}</option>))}
                 </select>
               </div>
-
               <div className="grid grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Заголовок</label>
-                  <input type="number" value={settings.titleSize} onChange={(e) => updateSetting('titleSize', Number(e.target.value))} min={8} max={32} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Текст</label>
-                  <input type="number" value={settings.textSize} onChange={(e) => updateSetting('textSize', Number(e.target.value))} min={6} max={24} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs text-gray-400 mb-1">Атрибуты</label>
-                  <input type="number" value={settings.attrSize} onChange={(e) => updateSetting('attrSize', Number(e.target.value))} min={6} max={20} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                </div>
+                <div><label className="block text-xs text-gray-400 mb-1">Заголовок (px)</label><input type="number" value={settings.titleSize} onChange={(e) => updateSetting('titleSize', Number(e.target.value))} min={8} max={32} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
+                <div><label className="block text-xs text-gray-400 mb-1">Текст (px)</label><input type="number" value={settings.textSize} onChange={(e) => updateSetting('textSize', Number(e.target.value))} min={6} max={24} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
+                <div><label className="block text-xs text-gray-400 mb-1">Атрибуты (px)</label><input type="number" value={settings.attrSize} onChange={(e) => updateSetting('attrSize', Number(e.target.value))} min={6} max={20} className="w-full bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
               </div>
             </>
           )}

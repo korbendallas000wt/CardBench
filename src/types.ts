@@ -17,21 +17,42 @@ export interface CardSettings {
   imageRadius: number;  // px
 }
 
+export interface TextAttribute {
+  type: 'text';
+  id: string;
+  content: string;
+  x: number; // % от ширины карточки
+  y: number; // % от высоты карточки
+  fontSize: number; // px
+  color: string;
+  fontFamily: string;
+  rotation: number; // градусы
+}
+
+export interface ImageAttribute {
+  type: 'image';
+  id: string;
+  imageUrl: string; // base64 data URL
+  x: number; // % от ширины карточки
+  y: number; // % от высоты карточки
+  width: number; // % от ширины карточки
+  height: number; // % от высоты карточки
+  borderRadius: number; // px
+  rotation: number; // градусы
+}
+
+export type Attribute = TextAttribute | ImageAttribute;
+
 export interface CardData {
   id: string;
   title: string;
   description: string;
   attributes: Attribute[];
   rules: string;
-  image: string | null; // base64 data URL
+  image: string | null; // base64 data URL (основное изображение карточки)
   settings: CardSettings;
   createdAt: number;
   updatedAt: number;
-}
-
-export interface Attribute {
-  label: string;
-  value: string;
 }
 
 export const DEFAULT_SETTINGS: CardSettings = {
