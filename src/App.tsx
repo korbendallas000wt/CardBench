@@ -90,7 +90,7 @@ function App() {
               <span className="text-2xl">🃏</span>
               <div>
                 <h1 className="text-lg font-bold bg-gradient-to-r from-purple-400 to-blue-400 bg-clip-text text-transparent">
-                  Card Forge
+                  Card Bench
                 </h1>
                 <p className="text-xs text-gray-500 hidden sm:block">Генератор карточек для настольных игр</p>
               </div>

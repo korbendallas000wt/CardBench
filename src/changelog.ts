@@ -11,6 +11,13 @@ export interface Version {
 
 export const changelog: Version[] = [
   {
+    version: '1.1.1',
+    date: '2026-10-20',
+    changes: [
+      { type: 'changed', description: 'Переименование приложения из Card Forge в Card Bench для соответствия названию проекта' },
+    ],
+  },
+  {
     version: '1.1.0',
     date: '2026-10-20',
     changes: [
@@ -23,7 +30,7 @@ export const changelog: Version[] = [
     version: '1.0.0',
     date: '2026-10-19',
     changes: [
-      { type: 'added', description: 'Начальная версия приложения Card Forge' },
+      { type: 'added', description: 'Начальная версия приложения Card Bench' },
       { type: 'added', description: 'Редактор, галерея и превью карточек' },
       { type: 'added', description: 'Импорт/экспорт данных и режим печати' },
       { type: 'added', description: 'Автоматический деплой на GitHub Pages' },
