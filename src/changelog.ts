@@ -11,6 +11,16 @@ export interface Version {
 
 export const changelog: Version[] = [
   {
+    version: '1.2.0',
+    date: '2026-10-20',
+    changes: [
+      { type: 'added', description: 'Система атрибутов-слоёв с точным позиционированием (текст и изображения)' },
+      { type: 'added', description: 'Ползунки для управления позицией X/Y, размером, поворотом и скруглением элементов' },
+      { type: 'added', description: 'Поддержка наложения элементов друг на друга в любом порядке' },
+      { type: 'changed', description: 'Переименование приложения из Card Forge в Card Bench' },
+    ],
+  },
+  {
     version: '1.1.1',
     date: '2026-10-20',
     changes: [
