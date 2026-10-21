@@ -48,11 +48,8 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     }
   }, []);
 
-  // Функция перевода промпта (RU -> EN)
   const translatePrompt = async () => {
     if (!aiPrompt.trim()) return;
-    
-    // Если кириллицы нет, перевод не нужен
     if (!/[а-яА-ЯёЁ]/.test(aiPrompt)) {
       setGenerateError("Промпт уже на английском языке");
       setTimeout(() => setGenerateError(null), 2000);
@@ -65,7 +62,6 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     try {
       const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(aiPrompt)}&langpair=ru|en`);
       const data = await response.json();
-      
       if (data.responseStatus === 200 && data.responseData.translatedText) {
         setAiPrompt(data.responseData.translatedText);
       } else {
@@ -90,19 +86,27 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     const seed = Math.floor(Math.random() * 100000);
     const url = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=512&height=512&nologo=true&seed=${seed}`;
     
+    // Настраиваем таймаут на 60 секунд (60000 мс)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000);
+    
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, { signal: controller.signal });
+      clearTimeout(timeoutId); // Отменяем таймер, если ответ получен
+
       if (!response.ok) {
         switch (response.status) {
           case 400: throw new Error("Ошибка 400: Неверный запрос. Проверьте промпт.");
           case 401: throw new Error("Ошибка 401: Неавторизованный запрос. Сервис временно ограничил доступ.");
-          case 402: throw new Error("Ошибка 402: Сервис требует оплаты или исчерпан лимит. Часто бывает при использовании VPN/прокси. Попробуйте отключить их.");
-          case 403: throw new Error("Ошибка 403: Доступ запрещён. Проверьте работу на опубликованном сайте или отключите блокировщики рекламы.");
+          case 402: throw new Error("Ошибка 402: Лимит исчерпан или запрос заблокирован. Попробуйте изменить промпт или отключить VPN.");
+          case 403: throw new Error("Ошибка 403: Доступ запрещён. Проверьте работу на опубликованном сайте или отключите блокировщики.");
           case 429: throw new Error("Ошибка 429: Слишком много запросов. Подождите минуту и попробуйте снова.");
           case 500: throw new Error("Ошибка 500: Внутренняя ошибка сервера генерации. Попробуйте позже.");
+          case 503: throw new Error("Ошибка 503: Сервис временно перегружен или недоступен. Попробуйте через минуту.");
           default: throw new Error(`Ошибка сети: Статус ${response.status}.`);
         }
       }
+      
       const blob = await response.blob();
       if (!blob.type.startsWith('image/')) throw new Error(`Получен не файл изображения, а: ${blob.type}.`);
 
@@ -117,8 +121,13 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
       };
       reader.readAsDataURL(blob);
     } catch (error: any) {
+      clearTimeout(timeoutId);
       setIsGenerating(false);
-      setGenerateError(error.message || "Неизвестная ошибка сети");
+      if (error.name === 'AbortError') {
+        setGenerateError("Превышено время ожидания (60 сек). Сервер перегружен, попробуйте позже.");
+      } else {
+        setGenerateError(error.message || "Неизвестная ошибка сети");
+      }
     }
   };
 
