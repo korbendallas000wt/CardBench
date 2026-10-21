@@ -11,6 +11,15 @@ export interface Version {
 
 export const changelog: Version[] = [
   {
+    version: '1.2.3',
+    date: '2026-10-20',
+    changes: [
+      { type: 'fixed', description: 'Добавлен таймаут 60 секунд для генерации ИИ (предотвращение зависаний)' },
+      { type: 'fixed', description: 'Добавлена обработка ошибки 503 (Service Unavailable)' },
+      { type: 'changed', description: 'Уточнено сообщение об ошибке 402 с подсказкой изменить промпт' },
+    ],
+  },
+  {
     version: '1.2.2',
     date: '2026-10-20',
     changes: [
