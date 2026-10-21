@@ -39,6 +39,14 @@ export default function CardGallery({ cards, onEdit, onDelete, onDuplicate, onPr
     onPrint(toPrint);
   };
 
+  const deleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    if (window.confirm(`Удалить ${selectedIds.size} карточек? Это действие нельзя отменить.`)) {
+      selectedIds.forEach(id => onDelete(id));
+      setSelectedIds(new Set());
+    }
+  };
+
   const handleDelete = (id: string) => {
     if (confirmDelete === id) {
       onDelete(id);
@@ -90,13 +98,14 @@ export default function CardGallery({ cards, onEdit, onDelete, onDuplicate, onPr
             onClick={printSelected}
             className="px-3 py-2 bg-emerald-600/20 border border-emerald-500/30 hover:bg-emerald-600/30 rounded-lg text-sm text-emerald-400 transition-colors"
           >
-            🖨️ Печать {selectedIds.size > 0 ? `(${selectedIds.size})` : '(все)'}
+            🖨 Печать {selectedIds.size > 0 ? `(${selectedIds.size})` : '(все)'}
           </button>
           <button
-            onClick={onNew}
-            className="px-3 py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-lg text-sm font-medium transition-all"
+            onClick={deleteSelected}
+            disabled={selectedIds.size === 0}
+            className="px-3 py-2 bg-red-600/20 border border-red-500/30 hover:bg-red-600/30 disabled:opacity-30 disabled:cursor-not-allowed rounded-lg text-sm text-red-400 transition-colors"
           >
-            + Новая
+            🗑 Удалить {selectedIds.size > 0 ? `(${selectedIds.size})` : ''}
           </button>
         </div>
       </div>
@@ -143,7 +152,7 @@ export default function CardGallery({ cards, onEdit, onDelete, onDuplicate, onPr
                 onClick={() => onEdit(card)}
                 className="flex-1 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 rounded text-xs text-blue-400 transition-colors"
               >
-                ✏️
+                ✏
               </button>
               <button
                 onClick={() => onDuplicate(card)}
@@ -157,7 +166,7 @@ export default function CardGallery({ cards, onEdit, onDelete, onDuplicate, onPr
                 className="py-1.5 px-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded text-xs text-emerald-400 transition-colors"
                 title="Печать"
               >
-                🖨️
+                🖨
               </button>
               <button
                 onClick={() => handleDelete(card.id)}
@@ -168,7 +177,7 @@ export default function CardGallery({ cards, onEdit, onDelete, onDuplicate, onPr
                 }`}
                 title={confirmDelete === card.id ? 'Подтвердить удаление' : 'Удалить'}
               >
-                {confirmDelete === card.id ? '✓?' : '🗑️'}
+                {confirmDelete === card.id ? '✓?' : '🗑'}
               </button>
             </div>
           </div>
