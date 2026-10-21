@@ -14,7 +14,6 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
   const [description, setDescription] = useState(editCard?.description ?? '');
   const [rules, setRules] = useState(editCard?.rules ?? '');
   
-  // Инициализация атрибутов: если их нет, создаём один текстовый по умолчанию
   const defaultAttrs: Attribute[] = editCard?.attributes && editCard.attributes.length > 0 
     ? editCard.attributes 
     : [{ type: 'text', id: generateId(), content: 'Текст атрибута', x: 10, y: 80, fontSize: 12, color: '#ffffff', fontFamily: 'Arial, sans-serif', rotation: 0 }];
@@ -61,10 +60,17 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     
     try {
       const response = await fetch(url);
+      
       if (!response.ok) {
-        if (response.status === 403) throw new Error("Доступ запрещён (403). Проверьте работу на опубликованном сайте.");
+        if (response.status === 402) {
+          throw new Error("Ошибка 402: Сервис требует оплаты или исчерпан лимит. Это часто случается при использовании VPN, прокси или определённых мобильных операторов. Попробуйте отключить VPN или повторите позже.");
+        }
+        if (response.status === 403) {
+          throw new Error("Доступ запрещён (403). Проверьте работу на опубликованном сайте или временно отключите блокировщики рекламы.");
+        }
         throw new Error(`HTTP ошибка! Статус: ${response.status}`);
       }
+      
       const blob = await response.blob();
       if (!blob.type.startsWith('image/')) throw new Error(`Получен не файл изображения, а: ${blob.type}.`);
 
@@ -98,29 +104,20 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     setSettings(prev => ({ ...prev, [key]: value }));
   };
 
-  // --- НОВАЯ ЛОГИКА АТРИБУТОВ ---
   const addTextAttribute = () => {
     setAttributes(prev => [...prev, {
-      type: 'text',
-      id: generateId(),
-      content: 'Новый текст',
-      x: 10, y: 10, fontSize: 14, color: '#ffffff', fontFamily: 'Arial, sans-serif', rotation: 0
+      type: 'text', id: generateId(), content: 'Новый текст', x: 10, y: 10, fontSize: 14, color: '#ffffff', fontFamily: 'Arial, sans-serif', rotation: 0
     }]);
   };
 
   const addImageAttribute = () => {
     setAttributes(prev => [...prev, {
-      type: 'image',
-      id: generateId(),
-      imageUrl: '',
-      x: 10, y: 10, width: 30, height: 30, borderRadius: 0, rotation: 0
+      type: 'image', id: generateId(), imageUrl: '', x: 10, y: 10, width: 30, height: 30, borderRadius: 0, rotation: 0
     }]);
   };
 
   const updateAttribute = (id: string, field: string, value: any) => {
-    setAttributes(prev => prev.map(attr =>
-      attr.id === id ? { ...attr, [field]: value } : attr
-    ));
+    setAttributes(prev => prev.map(attr => attr.id === id ? { ...attr, [field]: value } : attr));
   };
 
   const removeAttribute = (id: string) => {
@@ -134,18 +131,12 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
       updateAttribute(id, 'imageUrl', base64);
     }
   };
-  // ------------------------------
 
   const handleSave = () => {
     const now = Date.now();
     const card: CardData = {
       id: editCard?.id ?? generateId(),
-      title,
-      description,
-      attributes, // Теперь это массив TextAttribute | ImageAttribute
-      rules,
-      image,
-      settings,
+      title, description, attributes, rules, image, settings,
       createdAt: editCard?.createdAt ?? now,
       updatedAt: now,
     };
@@ -153,15 +144,8 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
   };
 
   const previewCard: CardData = {
-    id: 'preview',
-    title,
-    description,
-    attributes,
-    rules,
-    image,
-    settings,
-    createdAt: 0,
-    updatedAt: 0,
+    id: 'preview', title, description, attributes, rules, image, settings,
+    createdAt: 0, updatedAt: 0,
   };
 
   return (
@@ -180,7 +164,6 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
         <div className="bg-white/5 border border-white/10 rounded-xl p-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {activeTab === 'content' ? (
             <>
-              {/* Основное изображение карточки */}
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Фон / Основное изображение</label>
                 <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center cursor-pointer hover:border-purple-500/50 transition-colors" onClick={() => fileInputRef.current?.click()} onDrop={handleDrop} onDragOver={(e) => e.preventDefault()}>
@@ -232,7 +215,6 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
                 <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Название карточки..." className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none" />
               </div>
 
-              {/* НОВАЯ СЕКЦИЯ АТРИБУТОВ-СЛОЁВ */}
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-gray-300">Элементы на карточке (Слои)</label>
@@ -249,37 +231,17 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
                       
                       {attr.type === 'text' ? (
                         <>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Текстовый слой #{index + 1}</span>
-                          </div>
+                          <div className="flex items-center gap-2 mb-2"><span className="text-xs font-bold text-blue-400 uppercase tracking-wider">Текстовый слой #{index + 1}</span></div>
                           <textarea value={attr.content} onChange={(e) => updateAttribute(attr.id, 'content', e.target.value)} placeholder="Текст..." rows={2} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-purple-500 focus:outline-none resize-none" />
-                          
                           <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Позиция X (%): {attr.x}</label>
-                              <input type="range" min={0} max={100} value={attr.x} onChange={(e) => updateAttribute(attr.id, 'x', Number(e.target.value))} className="w-full accent-blue-500" />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Позиция Y (%): {attr.y}</label>
-                              <input type="range" min={0} max={100} value={attr.y} onChange={(e) => updateAttribute(attr.id, 'y', Number(e.target.value))} className="w-full accent-blue-500" />
-                            </div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Позиция X (%): {attr.x}</label><input type="range" min={0} max={100} value={attr.x} onChange={(e) => updateAttribute(attr.id, 'x', Number(e.target.value))} className="w-full accent-blue-500" /></div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Позиция Y (%): {attr.y}</label><input type="range" min={0} max={100} value={attr.y} onChange={(e) => updateAttribute(attr.id, 'y', Number(e.target.value))} className="w-full accent-blue-500" /></div>
                           </div>
-                          
                           <div className="grid grid-cols-3 gap-3">
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Размер (px)</label>
-                              <input type="number" value={attr.fontSize} onChange={(e) => updateAttribute(attr.id, 'fontSize', Number(e.target.value))} min={6} max={48} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Поворот (°)</label>
-                              <input type="number" value={attr.rotation} onChange={(e) => updateAttribute(attr.id, 'rotation', Number(e.target.value))} min={-180} max={180} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Цвет</label>
-                              <input type="color" value={attr.color} onChange={(e) => updateAttribute(attr.id, 'color', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" />
-                            </div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Размер (px)</label><input type="number" value={attr.fontSize} onChange={(e) => updateAttribute(attr.id, 'fontSize', Number(e.target.value))} min={6} max={48} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Поворот (°)</label><input type="number" value={attr.rotation} onChange={(e) => updateAttribute(attr.id, 'rotation', Number(e.target.value))} min={-180} max={180} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Цвет</label><input type="color" value={attr.color} onChange={(e) => updateAttribute(attr.id, 'color', e.target.value)} className="w-full h-8 rounded cursor-pointer bg-transparent" /></div>
                           </div>
-                          
                           <div>
                             <label className="block text-xs text-gray-400 mb-1">Шрифт</label>
                             <select value={attr.fontFamily} onChange={(e) => updateAttribute(attr.id, 'fontFamily', e.target.value)} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1.5 text-sm text-white focus:border-purple-500 focus:outline-none">
@@ -289,53 +251,27 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
                         </>
                       ) : (
                         <>
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-xs font-bold text-green-400 uppercase tracking-wider">Графический слой #{index + 1}</span>
-                          </div>
-                          
+                          <div className="flex items-center gap-2 mb-2"><span className="text-xs font-bold text-green-400 uppercase tracking-wider">Графический слой #{index + 1}</span></div>
                           <div className="border-2 border-dashed border-white/20 rounded-lg p-4 text-center cursor-pointer hover:border-green-500/50 transition-colors relative">
                             {attr.imageUrl ? (
                               <div className="relative">
                                 <img src={attr.imageUrl} alt="" className="max-h-24 mx-auto rounded" />
                                 <button onClick={(e) => { e.stopPropagation(); updateAttribute(attr.id, 'imageUrl', ''); }} className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center hover:bg-red-600">✕</button>
                               </div>
-                            ) : (
-                              <p className="text-xs text-gray-500">Нажмите для загрузки изображения</p>
-                            )}
+                            ) : (<p className="text-xs text-gray-500">Нажмите для загрузки изображения</p>)}
                             <input type="file" accept="image/*" onChange={(e) => handleAttrImageUpload(attr.id, e)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                           </div>
-
                           <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Позиция X (%): {attr.x}</label>
-                              <input type="range" min={0} max={100} value={attr.x} onChange={(e) => updateAttribute(attr.id, 'x', Number(e.target.value))} className="w-full accent-green-500" />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Позиция Y (%): {attr.y}</label>
-                              <input type="range" min={0} max={100} value={attr.y} onChange={(e) => updateAttribute(attr.id, 'y', Number(e.target.value))} className="w-full accent-green-500" />
-                            </div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Позиция X (%): {attr.x}</label><input type="range" min={0} max={100} value={attr.x} onChange={(e) => updateAttribute(attr.id, 'x', Number(e.target.value))} className="w-full accent-green-500" /></div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Позиция Y (%): {attr.y}</label><input type="range" min={0} max={100} value={attr.y} onChange={(e) => updateAttribute(attr.id, 'y', Number(e.target.value))} className="w-full accent-green-500" /></div>
                           </div>
-
                           <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Ширина (%): {attr.width}</label>
-                              <input type="range" min={5} max={100} value={attr.width} onChange={(e) => updateAttribute(attr.id, 'width', Number(e.target.value))} className="w-full accent-green-500" />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Высота (%): {attr.height}</label>
-                              <input type="range" min={5} max={100} value={attr.height} onChange={(e) => updateAttribute(attr.id, 'height', Number(e.target.value))} className="w-full accent-green-500" />
-                            </div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Ширина (%): {attr.width}</label><input type="range" min={5} max={100} value={attr.width} onChange={(e) => updateAttribute(attr.id, 'width', Number(e.target.value))} className="w-full accent-green-500" /></div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Высота (%): {attr.height}</label><input type="range" min={5} max={100} value={attr.height} onChange={(e) => updateAttribute(attr.id, 'height', Number(e.target.value))} className="w-full accent-green-500" /></div>
                           </div>
-
                           <div className="grid grid-cols-2 gap-3">
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Поворот (°)</label>
-                              <input type="number" value={attr.rotation} onChange={(e) => updateAttribute(attr.id, 'rotation', Number(e.target.value))} min={-180} max={180} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                            </div>
-                            <div>
-                              <label className="block text-xs text-gray-400 mb-1">Скругление (px)</label>
-                              <input type="number" value={attr.borderRadius} onChange={(e) => updateAttribute(attr.id, 'borderRadius', Number(e.target.value))} min={0} max={50} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" />
-                            </div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Поворот (°)</label><input type="number" value={attr.rotation} onChange={(e) => updateAttribute(attr.id, 'rotation', Number(e.target.value))} min={-180} max={180} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
+                            <div><label className="block text-xs text-gray-400 mb-1">Скругление (px)</label><input type="number" value={attr.borderRadius} onChange={(e) => updateAttribute(attr.id, 'borderRadius', Number(e.target.value))} min={0} max={50} className="w-full bg-white/5 border border-white/10 rounded px-2 py-1 text-sm text-white focus:border-purple-500 focus:outline-none" /></div>
                           </div>
                         </>
                       )}
@@ -348,14 +284,12 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
                 <label className="block text-sm font-medium text-gray-300 mb-1">Описание</label>
                 <textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Описание карточки..." rows={3} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none resize-none" />
               </div>
-
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-1">Правила</label>
                 <textarea value={rules} onChange={(e) => setRules(e.target.value)} placeholder="Особые правила..." rows={2} className="w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none resize-none" />
               </div>
             </>
           ) : (
-            // Вкладка "Стиль" остаётся без изменений (управляет глобальными настройками карточки)
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">Стандартные размеры</label>
