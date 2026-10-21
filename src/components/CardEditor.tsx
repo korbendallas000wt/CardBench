@@ -27,6 +27,7 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
   const [showAiGen, setShowAiGen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isTranslating, setIsTranslating] = useState(false);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
 
@@ -46,6 +47,37 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
       setImage(base64);
     }
   }, []);
+
+  // Функция перевода промпта (RU -> EN)
+  const translatePrompt = async () => {
+    if (!aiPrompt.trim()) return;
+    
+    // Если кириллицы нет, перевод не нужен
+    if (!/[а-яА-ЯёЁ]/.test(aiPrompt)) {
+      setGenerateError("Промпт уже на английском языке");
+      setTimeout(() => setGenerateError(null), 2000);
+      return;
+    }
+    
+    setIsTranslating(true);
+    setGenerateError(null);
+    
+    try {
+      const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(aiPrompt)}&langpair=ru|en`);
+      const data = await response.json();
+      
+      if (data.responseStatus === 200 && data.responseData.translatedText) {
+        setAiPrompt(data.responseData.translatedText);
+      } else {
+        throw new Error("API вернул ошибку");
+      }
+    } catch (error) {
+      console.warn("Не удалось перевести промпт:", error);
+      setGenerateError("Не удалось перевести. Попробуйте вручную или отправьте как есть.");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
 
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
@@ -124,13 +156,11 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     setAttributes(prev => prev.filter(attr => attr.id !== id));
   };
 
-  // НОВАЯ ФУНКЦИЯ: Перемещение слоёв вверх/вниз
   const moveAttribute = (index: number, direction: 'up' | 'down') => {
     setAttributes(prev => {
       const next = [...prev];
       const newIndex = direction === 'up' ? index - 1 : index + 1;
       if (newIndex < 0 || newIndex >= next.length) return prev;
-      // Меняем местами элементы
       [next[index], next[newIndex]] = [next[newIndex], next[index]];
       return next;
     });
@@ -199,16 +229,36 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
 
                 {showAiGen && (
                   <div className="mt-3 p-4 bg-black/20 border border-purple-500/20 rounded-lg space-y-3">
-                    <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="e.g., dark fantasy forest, glowing mushrooms" rows={2} className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none resize-none" />
-                    <div className="flex flex-wrap gap-2">
-                      {['fantasy forest', 'magic crystal', 'medieval sword', 'spaceship', 'ancient scroll'].map(tag => (
-                        <button key={tag} onClick={() => setAiPrompt(tag)} className="text-xs px-2 py-1 bg-white/5 hover:bg-purple-600/30 border border-white/10 rounded transition-colors">{tag}</button>
-                      ))}
+                    <textarea 
+                      value={aiPrompt} 
+                      onChange={(e) => setAiPrompt(e.target.value)} 
+                      placeholder="Например: космический корабль, туманность" 
+                      rows={2} 
+                      className="w-full bg-white/5 border border-white/10 rounded px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-purple-500 focus:outline-none resize-none" 
+                    />
+                    
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex flex-wrap gap-2 flex-1">
+                        {['космический корабль', 'фэнтези лес', 'магический кристалл', 'средневековый меч', 'древний свиток'].map(tag => (
+                          <button key={tag} onClick={() => setAiPrompt(tag)} className="text-xs px-2 py-1 bg-white/5 hover:bg-purple-600/30 border border-white/10 rounded transition-colors">{tag}</button>
+                        ))}
+                      </div>
+                      <button 
+                        onClick={translatePrompt} 
+                        disabled={isTranslating || !aiPrompt.trim()}
+                        className="px-3 py-1 bg-green-600/30 hover:bg-green-600/50 border border-green-500/30 disabled:opacity-30 disabled:cursor-not-allowed rounded text-xs text-green-300 transition-colors whitespace-nowrap"
+                        title="Перевести промпт на английский"
+                      >
+                        {isTranslating ? '⏳' : '→ EN'}
+                      </button>
                     </div>
+                    
                     <button onClick={handleAiGenerate} disabled={isGenerating || !aiPrompt.trim()} className="w-full py-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 disabled:opacity-50 rounded-lg text-sm font-medium flex items-center justify-center gap-2">
                       {isGenerating ? '⏳ Генерация...' : '✨ Сгенерировать'}
                     </button>
+                    
                     {generateError && <div className="p-3 bg-red-500/20 border border-red-500/50 rounded text-sm text-red-200">⚠️ {generateError}</div>}
+                    
                     {generatedImage && (
                       <div className="space-y-3 pt-2 border-t border-white/10">
                         <img src={generatedImage} alt="Generated" className="w-full max-h-48 object-contain rounded-lg border border-white/10 bg-black/40" />
@@ -239,32 +289,10 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
                 <div className="space-y-4">
                   {attributes.map((attr, index) => (
                     <div key={attr.id} className="p-3 bg-black/20 border border-white/10 rounded-lg space-y-3 relative group">
-                      
-                      {/* Кнопки управления порядком и удаления */}
                       <div className="absolute top-2 right-2 flex gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
-                        <button
-                          onClick={() => moveAttribute(index, 'up')}
-                          disabled={index === 0}
-                          className="text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed text-lg"
-                          title="Переместить выше (на передний план)"
-                        >
-                          ⬆️
-                        </button>
-                        <button
-                          onClick={() => moveAttribute(index, 'down')}
-                          disabled={index === attributes.length - 1}
-                          className="text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed text-lg"
-                          title="Переместить ниже (на задний план)"
-                        >
-                          ⬇️
-                        </button>
-                        <button
-                          onClick={() => removeAttribute(attr.id)}
-                          className="text-red-400 hover:text-red-300 text-lg"
-                          title="Удалить слой"
-                        >
-                          ✕
-                        </button>
+                        <button onClick={() => moveAttribute(index, 'up')} disabled={index === 0} className="text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed text-lg" title="Переместить выше">⬆️</button>
+                        <button onClick={() => moveAttribute(index, 'down')} disabled={index === attributes.length - 1} className="text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed text-lg" title="Переместить ниже">⬇️</button>
+                        <button onClick={() => removeAttribute(attr.id)} className="text-red-400 hover:text-red-300 text-lg" title="Удалить слой">✕</button>
                       </div>
                       
                       {attr.type === 'text' ? (
