@@ -60,26 +60,17 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
     
     try {
       const response = await fetch(url);
-      
       if (!response.ok) {
         switch (response.status) {
-          case 400:
-            throw new Error("Ошибка 400: Неверный запрос. Проверьте, не содержит ли промпт недопустимые символы или не слишком ли он длинный.");
-          case 401:
-            throw new Error("Ошибка 401: Неавторизованный запрос. Сервис временно ограничил доступ без API-ключа.");
-          case 402:
-            throw new Error("Ошибка 402: Сервис требует оплаты или исчерпан лимит. Это часто случается при использовании VPN, прокси или определённых мобильных операторов. Попробуйте отключить VPN.");
-          case 403:
-            throw new Error("Ошибка 403: Доступ запрещён. Проверьте работу на опубликованном сайте или временно отключите блокировщики рекламы.");
-          case 429:
-            throw new Error("Ошибка 429: Слишком много запросов. Вы достигли лимита частоты. Подождите минуту и попробуйте снова.");
-          case 500:
-            throw new Error("Ошибка 500: Внутренняя ошибка сервера генерации. Попробуйте повторить запрос чуть позже.");
-          default:
-            throw new Error(`Ошибка сети: Статус ${response.status}. Попробуйте позже или проверьте подключение к интернету.`);
+          case 400: throw new Error("Ошибка 400: Неверный запрос. Проверьте промпт.");
+          case 401: throw new Error("Ошибка 401: Неавторизованный запрос. Сервис временно ограничил доступ.");
+          case 402: throw new Error("Ошибка 402: Сервис требует оплаты или исчерпан лимит. Часто бывает при использовании VPN/прокси. Попробуйте отключить их.");
+          case 403: throw new Error("Ошибка 403: Доступ запрещён. Проверьте работу на опубликованном сайте или отключите блокировщики рекламы.");
+          case 429: throw new Error("Ошибка 429: Слишком много запросов. Подождите минуту и попробуйте снова.");
+          case 500: throw new Error("Ошибка 500: Внутренняя ошибка сервера генерации. Попробуйте позже.");
+          default: throw new Error(`Ошибка сети: Статус ${response.status}.`);
         }
       }
-      
       const blob = await response.blob();
       if (!blob.type.startsWith('image/')) throw new Error(`Получен не файл изображения, а: ${blob.type}.`);
 
@@ -131,6 +122,18 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
 
   const removeAttribute = (id: string) => {
     setAttributes(prev => prev.filter(attr => attr.id !== id));
+  };
+
+  // НОВАЯ ФУНКЦИЯ: Перемещение слоёв вверх/вниз
+  const moveAttribute = (index: number, direction: 'up' | 'down') => {
+    setAttributes(prev => {
+      const next = [...prev];
+      const newIndex = direction === 'up' ? index - 1 : index + 1;
+      if (newIndex < 0 || newIndex >= next.length) return prev;
+      // Меняем местами элементы
+      [next[index], next[newIndex]] = [next[newIndex], next[index]];
+      return next;
+    });
   };
 
   const handleAttrImageUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
@@ -236,7 +239,33 @@ export default function CardEditor({ editCard, onSave, onCancel }: Props) {
                 <div className="space-y-4">
                   {attributes.map((attr, index) => (
                     <div key={attr.id} className="p-3 bg-black/20 border border-white/10 rounded-lg space-y-3 relative group">
-                      <button onClick={() => removeAttribute(attr.id)} className="absolute top-2 right-2 text-red-400 hover:text-red-300 text-lg opacity-50 group-hover:opacity-100 transition-opacity">✕</button>
+                      
+                      {/* Кнопки управления порядком и удаления */}
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-50 group-hover:opacity-100 transition-opacity">
+                        <button
+                          onClick={() => moveAttribute(index, 'up')}
+                          disabled={index === 0}
+                          className="text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed text-lg"
+                          title="Переместить выше (на передний план)"
+                        >
+                          ⬆️
+                        </button>
+                        <button
+                          onClick={() => moveAttribute(index, 'down')}
+                          disabled={index === attributes.length - 1}
+                          className="text-blue-400 hover:text-blue-300 disabled:opacity-30 disabled:cursor-not-allowed text-lg"
+                          title="Переместить ниже (на задний план)"
+                        >
+                          ⬇️
+                        </button>
+                        <button
+                          onClick={() => removeAttribute(attr.id)}
+                          className="text-red-400 hover:text-red-300 text-lg"
+                          title="Удалить слой"
+                        >
+                          ✕
+                        </button>
+                      </div>
                       
                       {attr.type === 'text' ? (
                         <>
