@@ -11,13 +11,27 @@ export interface Version {
 
 export const changelog: Version[] = [
   {
+    version: '1.2.2',
+    date: '2026-10-20',
+    changes: [
+      { type: 'changed', description: 'Убрана дублирующая кнопка "Новая" из тулбара галереи' },
+      { type: 'added', description: 'Добавлена кнопка массового удаления выбранных карточек' },
+    ],
+  },
+  {
+    version: '1.2.1',
+    date: '2026-10-20',
+    changes: [
+      { type: 'fixed', description: 'Улучшена обработка ошибок ИИ-генерации (добавлены конкретные сообщения для статусов 400, 401, 402, 403, 429, 500)' },
+    ],
+  },
+  {
     version: '1.2.0',
     date: '2026-10-20',
     changes: [
       { type: 'added', description: 'Система атрибутов-слоёв с точным позиционированием (текст и изображения)' },
       { type: 'added', description: 'Ползунки для управления позицией X/Y, размером, поворотом и скруглением элементов' },
       { type: 'added', description: 'Поддержка наложения элементов друг на друга в любом порядке' },
-      { type: 'changed', description: 'Переименование приложения из Card Forge в Card Bench' },
     ],
   },
   {
